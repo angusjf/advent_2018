@@ -25,7 +25,7 @@ fn nearest(points: []Point, x: u32, y: u32) ?usize {
     return index;
 }
 
-fn solve(gpa: std.mem.Allocator, input: []const u8) !u32 {
+fn solve1(gpa: std.mem.Allocator, input: []const u8) !u32 {
     var points: std.ArrayList(Point) = .empty;
     defer points.deinit(gpa);
 
@@ -67,15 +67,15 @@ fn solve(gpa: std.mem.Allocator, input: []const u8) !u32 {
                 const gop = try nearest_points.getOrPut(gpa, n);
                 if (!gop.found_existing) gop.value_ptr.* = 0;
                 gop.value_ptr.* += 1;
-                std.debug.print("{c}", .{((@as(u8, @intCast(n)) % 26) + 'a')});
+                // std.debug.print("{c}", .{((@as(u8, @intCast(n)) % 26) + 'a')});
                 if (x == min_x or y == min_y or x == max_x or y == max_y) {
                     try infinite.put(gpa, n, {});
                 }
             } else {
-                std.debug.print(".", .{});
+                // std.debug.print(".", .{});
             }
         }
-        std.debug.print("\n", .{});
+        // std.debug.print("\n", .{});
     }
 
     var max: u32 = 0;
@@ -84,11 +84,70 @@ fn solve(gpa: std.mem.Allocator, input: []const u8) !u32 {
     while (it.next()) |kv| {
         if (!infinite.contains(kv.key_ptr.*)) {
             max = @max(max, kv.value_ptr.*);
-            std.debug.print("{c} -> {any}\n", .{ 'A' + @as(u8, @intCast(kv.key_ptr.*)), kv.value_ptr.* });
+            // std.debug.print("{c} -> {any}\n", .{ 'A' + @as(u8, @intCast(kv.key_ptr.*)), kv.value_ptr.* });
         }
     }
 
     return max;
+}
+
+fn solve2(gpa: std.mem.Allocator, input: []const u8, limit: u32) !u32 {
+    var points: std.ArrayList(Point) = .empty;
+    defer points.deinit(gpa);
+
+    var numbers = std.mem.tokenizeAny(u8, input, "\n, ");
+
+    while (numbers.next()) |x| {
+        const y = numbers.next().?;
+
+        try points.append(gpa, .{
+            .x = try std.fmt.parseInt(u32, x, 10),
+            .y = try std.fmt.parseInt(u32, y, 10),
+        });
+    }
+
+    var min_x: u32 = std.math.maxInt(u32);
+    var min_y: u32 = std.math.maxInt(u32);
+    var max_x: u32 = std.math.minInt(u32);
+    var max_y: u32 = std.math.minInt(u32);
+
+    for (points.items) |point| {
+        min_x = @min(min_x, point.x);
+        min_y = @min(min_y, point.y);
+        max_x = @max(max_x, point.x);
+        max_y = @max(max_y, point.y);
+    }
+    min_x -= 1;
+    min_y -= 1;
+    max_x += 1;
+    max_y += 1;
+
+    var nearest_points: std.AutoHashMapUnmanaged(usize, u32) = .empty;
+    defer nearest_points.deinit(gpa);
+    var infinite: std.AutoHashMapUnmanaged(usize, void) = .empty;
+    defer infinite.deinit(gpa);
+
+    var total: u32 = 0;
+
+    for (min_y..max_y + 1) |y| {
+        for (min_x..max_x + 1) |x| {
+            var dist: u32 = 0;
+            for (points.items) |point| {
+                const dist_x = abs_diff(point.x, @intCast(x));
+                const dist_y = abs_diff(point.y, @intCast(y));
+                dist += dist_x + dist_y;
+            }
+            if (dist >= limit) {
+                std.debug.print(".", .{});
+            } else {
+                total += 1;
+                std.debug.print("#", .{});
+            }
+        }
+        std.debug.print("\n", .{});
+    }
+
+    return total;
 }
 
 test {
@@ -101,11 +160,24 @@ test {
         \\8, 9
     ;
 
-    try std.testing.expectEqual(17, try solve(std.testing.allocator, input));
+    try std.testing.expectEqual(17, try solve1(std.testing.allocator, input));
+}
+
+test {
+    const input =
+        \\1, 1
+        \\1, 6
+        \\8, 3
+        \\3, 4
+        \\5, 5
+        \\8, 9
+    ;
+
+    try std.testing.expectEqual(16, try solve2(std.testing.allocator, input, 32));
 }
 
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
     const gpa = debug_allocator.allocator();
-    std.debug.print("{any}", .{try solve(gpa, @embedFile("input06.txt"))});
+    std.debug.print("{any}", .{try solve2(gpa, @embedFile("input06.txt"), 10000)});
 }
